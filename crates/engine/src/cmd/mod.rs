@@ -12,6 +12,7 @@ pub(crate) mod convert;
 mod cull;
 pub mod curves;
 pub(crate) mod denoise;
+mod rawrefinery;
 mod develop;
 mod edit;
 mod export;
@@ -162,6 +163,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(geocode::specs());
         v.extend(filters::specs());
         v.extend(denoise::specs());
+        v.extend(rawrefinery::specs());
         v.extend(face_models::specs());
         v.extend(face_detect::specs());
         v.extend(face_recognize::specs());

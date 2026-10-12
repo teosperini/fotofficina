@@ -24,6 +24,7 @@ pub mod menubar;
 pub mod menus;
 pub mod merge;
 mod model_setup;
+mod rawrefinery;
 pub mod panels;
 pub mod pick;
 pub mod region;
@@ -1059,6 +1060,7 @@ impl LightcraftApp {
         panels::denoise::pump(self, ctx);
         model_setup::pump(self, ctx);
         panels::faces::pump(self, ctx);
+        rawrefinery::pump(self, ctx);
         self.collect_screenshots(ctx);
         self.issue_screenshots(ctx);
         if self.fonts_ready {

@@ -57,6 +57,7 @@ pub mod preset_import;
 pub mod preset_luminar;
 pub mod presets;
 pub mod proof;
+pub mod rawrefinery;
 pub mod rename;
 pub mod segment;
 pub mod sidecar;
@@ -1020,6 +1021,8 @@ mod tests_persist;
 mod tests_prefs;
 #[cfg(test)]
 mod tests_process;
+#[cfg(test)]
+mod tests_rawrefinery;
 #[cfg(test)]
 mod tests_segment;
 #[cfg(test)]
