@@ -234,7 +234,7 @@ pub fn data_offset(entry: &ZipEntry, local: &[u8]) -> Result<u64, String> {
 /// Check an entry's bytes.
 pub fn verify(entry: &ZipEntry, data: &[u8]) -> Result<(), String> {
     if entry.method != 0 {
-        return Err(format!("{}: compressed entries are not supported (not a LightCraft backup?)", entry.name));
+        return Err(format!("{}: compressed entries are not supported (not a Fotofficina backup?)", entry.name));
     }
     if data.len() as u64 != entry.size || crc32fast::hash(data) != entry.crc {
         return Err(format!("{}: damaged (checksum mismatch)", entry.name));

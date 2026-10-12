@@ -55,7 +55,7 @@ impl OriginalGuard {
             for (p, what) in self.by_name.get(n).into_iter().flatten() {
                 if same_file(p, target) {
                     return Err(format!(
-                        "{} is {what} in the library: LightCraft never writes over an original (choose another folder or file name)",
+                        "{} is {what} in the library: Fotofficina never writes over an original (choose another folder or file name)",
                         target.display()
                     ));
                 }
@@ -69,7 +69,7 @@ impl OriginalGuard {
         for (p, what) in links {
             if same_file(p, target) {
                 return Err(format!(
-                    "{} is {what} in the library: LightCraft never writes over an original (choose another folder or file name)",
+                    "{} is {what} in the library: Fotofficina never writes over an original (choose another folder or file name)",
                     target.display()
                 ));
             }

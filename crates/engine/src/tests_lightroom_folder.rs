@@ -78,7 +78,7 @@ fn each_part_of_a_lightroom_catalog_is_refused() {
         refused(&root, &p, &catalog);
     }
     let e = Session::new().open_library(&dir, false).unwrap_err().to_string();
-    assert!(e.contains("Lightroom Classic catalog, not a LightCraft library") && e.contains("Import Lightroom Catalog"), "{e}");
+    assert!(e.contains("Lightroom Classic catalog, not a Fotofficina library") && e.contains("Import Lightroom Catalog"), "{e}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -130,7 +130,7 @@ fn a_lightcraft_library_with_a_catalog_inside_still_opens() {
     assert_eq!(lightroom_catalog_at(&lib), None);
     let mut s = Session::new();
     s.open_library(&lib, false).unwrap();
-    assert!(!s.catalog.is_empty(), "the LightCraft library opened");
+    assert!(!s.catalog.is_empty(), "the Fotofficina library opened");
     let _ = std::fs::remove_dir_all(&root);
 }
 

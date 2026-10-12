@@ -701,8 +701,8 @@ pub fn start(chinese_font: Vec<u8>) {
                 }
             }
             Err(e) => {
-                log::error!("LightCraft failed to start: {e:?}");
-                set_status(&format!("LightCraft failed to start: {e:?}"));
+                log::error!("Fotofficina failed to start: {e:?}");
+                set_status(&format!("Fotofficina failed to start: {e:?}"));
             }
         }
     });

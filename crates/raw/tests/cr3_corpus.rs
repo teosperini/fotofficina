@@ -91,7 +91,7 @@ fn canon_r8_craw_sensor_is_exact() {
 /// low-ISO C-RAW files need no QP-map escape (most of the camera's files do; that is covered by the unit
 /// tests in `crx.rs`, see docs/cr3.md). The developed images match the camera's own previews.
 fn check_r5m2(name: &str, hash: u64, sensor: (usize, usize), developed: Option<(usize, usize)>) {
-    check_against(name, hash, sensor, developed, "the pinned LightCraft decode");
+    check_against(name, hash, sensor, developed, "the pinned Fotofficina decode");
 }
 
 #[test]

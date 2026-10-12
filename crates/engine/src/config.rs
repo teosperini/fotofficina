@@ -37,8 +37,8 @@ fn config_dir_with(platform: Platform, env: impl Fn(&str) -> Option<OsString>) -
         return (!dir.is_empty()).then(|| PathBuf::from(dir));
     }
     match platform {
-        Platform::Mac => env("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/LightCraft")),
-        Platform::Windows => env("APPDATA").map(|a| PathBuf::from(a).join("LightCraft")),
+        Platform::Mac => env("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/Fotofficina")),
+        Platform::Windows => env("APPDATA").map(|a| PathBuf::from(a).join("Fotofficina")),
         Platform::Other => {
             env("XDG_CONFIG_HOME").map(PathBuf::from).or_else(|| env("HOME").map(|h| PathBuf::from(h).join(".config"))).map(|c| c.join("lightcraft"))
         }
@@ -131,8 +131,8 @@ mod config_tests {
     #[test]
     fn config_unset_override_keeps_platform_defaults() {
         let vars = [("HOME", "/user"), ("APPDATA", "/roaming"), ("XDG_CONFIG_HOME", "/xdg")];
-        assert_eq!(resolve(Platform::Mac, &vars), Some(PathBuf::from("/user/Library/Application Support/LightCraft")));
-        assert_eq!(resolve(Platform::Windows, &vars), Some(PathBuf::from("/roaming/LightCraft")));
+        assert_eq!(resolve(Platform::Mac, &vars), Some(PathBuf::from("/user/Library/Application Support/Fotofficina")));
+        assert_eq!(resolve(Platform::Windows, &vars), Some(PathBuf::from("/roaming/Fotofficina")));
         assert_eq!(resolve(Platform::Other, &vars), Some(PathBuf::from("/xdg/lightcraft")));
         assert_eq!(resolve(Platform::Other, &[("HOME", "/user")]), Some(PathBuf::from("/user/.config/lightcraft")));
         for platform in [Platform::Mac, Platform::Windows, Platform::Other] {

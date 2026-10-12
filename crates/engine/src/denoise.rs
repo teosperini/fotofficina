@@ -130,7 +130,7 @@ const GPU_MAX_FALLBACKS: usize = 3;
 pub(crate) const GPU_SETUP_MARKER: &str = "gpu-setup.marker";
 /// Why the card is not tried when a set-up marker is found.
 #[cfg(feature = "denoise")]
-const GPU_CRASHED: &str = "LightCraft closed while it was setting up the graphics card for AI Denoise last time";
+const GPU_CRASHED: &str = "Fotofficina closed while it was setting up the graphics card for AI Denoise last time";
 /// Why the card is not used when its set-up ran out of time (the start of it).
 #[cfg(feature = "denoise")]
 const GPU_SLOW: &str = "setting up the graphics card took longer than";

@@ -238,7 +238,7 @@ fn import_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
     heading(ui, t, crate::i18n::tr("Raw defaults"));
     hint(ui, t, crate::i18n::tr("Settings new raw photos start from. Changing them doesn't touch photos already in the library."));
     row(ui, t, crate::i18n::tr("Raw photos"), |ui| {
-        if let Some(v) = preset_combo(app, ui, "settingsRawPreset", d.raw_preset.as_deref(), "LightCraft Default") {
+        if let Some(v) = preset_combo(app, ui, "settingsRawPreset", d.raw_preset.as_deref(), "Fotofficina Default") {
             let _ = app.run("library.preferences", json!({"import": {"rawPreset": v}}));
         }
     });
@@ -266,7 +266,7 @@ fn import_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
                     let mut pick = None;
                     let label = match current {
                         Some(RAW_DEFAULT) => crate::i18n::tr("Same as raw default").to_string(),
-                        None => crate::i18n::tr("LightCraft Default").to_string(),
+                        None => crate::i18n::tr("Fotofficina Default").to_string(),
                         Some(pid) => app
                             .session
                             .presets
@@ -280,7 +280,7 @@ fn import_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
                         if ui.selectable_label(current == Some(RAW_DEFAULT), crate::i18n::tr("Same as raw default")).clicked() {
                             pick = Some(json!({"camera": cam, "remove": true}));
                         }
-                        if ui.selectable_label(current.is_none(), crate::i18n::tr("LightCraft Default")).clicked() {
+                        if ui.selectable_label(current.is_none(), crate::i18n::tr("Fotofficina Default")).clicked() {
                             pick = Some(json!({"camera": cam, "preset": null}));
                         }
                         for p in &app.session.presets {
@@ -396,7 +396,7 @@ fn import_tab(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens) {
         }
     }
     if app.session.library.is_none() {
-        hint(ui, t, crate::i18n::tr("In-memory session: these settings last until LightCraft quits."));
+        hint(ui, t, crate::i18n::tr("In-memory session: these settings last until Fotofficina quits."));
     }
 }
 

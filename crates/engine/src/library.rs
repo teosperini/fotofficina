@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use crate::{EngineError, LibrarySource, Result, Selection, Session};
 
 /// Library directory name inside the user's Pictures folder.
-pub const DEFAULT_NAME: &str = "LightCraft Library";
+pub const DEFAULT_NAME: &str = "Fotofficina Library";
 
 /// The library folder `path` names. A library is a folder; naming one of its own files
 /// (`catalog.snap`, `catalog.log`, `catalog.lock`) means the folder that holds it. Any other
@@ -221,7 +221,7 @@ fn same_dir(a: &Path, b: &Path) -> bool {
 fn program_name() -> String {
     let exe = std::env::current_exe().ok().and_then(|p| p.file_stem().map(|s| s.to_string_lossy().to_string()));
     match exe.as_deref() {
-        Some("lightcraft") | None => "LightCraft".into(),
+        Some("lightcraft") | None => "Fotofficina".into(),
         Some(other) => other.to_string(),
     }
 }
@@ -246,7 +246,7 @@ impl SettingsLoad {
                 log::error!("library: {name}: {e}");
                 self.blocked.push(name);
                 self.warnings.push(format!(
-                    "{name} couldn't be read ({e}). LightCraft uses the defaults for now and won't overwrite the file; reopen the library to try again."
+                    "{name} couldn't be read ({e}). Fotofficina uses the defaults for now and won't overwrite the file; reopen the library to try again."
                 ));
                 return None;
             }
@@ -263,7 +263,7 @@ impl SettingsLoad {
             Err(w) => {
                 self.blocked.push(name);
                 self.warnings.push(format!(
-                    "{name} is damaged ({err}) and couldn't be set aside ({w}). LightCraft uses the defaults and won't overwrite the file."
+                    "{name} is damaged ({err}) and couldn't be set aside ({w}). Fotofficina uses the defaults and won't overwrite the file."
                 ));
             }
         }

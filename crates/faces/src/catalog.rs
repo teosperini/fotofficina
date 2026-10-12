@@ -92,10 +92,10 @@ fn entry(v: &Value) -> Result<Entry, String> {
         return Err("`url` must be an https:// address of at most 500 characters, without spaces".into());
     }
     if known::all().iter().any(|k| k.id == m.id) {
-        return Err("that id belongs to a model LightCraft already knows".into());
+        return Err("that id belongs to a model Fotofficina already knows".into());
     }
     if m.sha256.as_deref().is_some_and(|h| known::lookup(h).is_some()) {
-        return Err("LightCraft already knows a model with that file".into());
+        return Err("Fotofficina already knows a model with that file".into());
     }
     Ok(Entry { file_name: file_name_of(&raw.url), url: raw.url, manifest: raw.manifest })
 }

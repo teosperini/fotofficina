@@ -1798,7 +1798,7 @@ mod tests {
         h.settle(SETTLE);
         assert!(preview(&mut h).is_none(), "no preview without a watermark");
         if let Some(crate::state::Dialog::Export { opts, .. }) = &mut h.app.ui.dialog {
-            opts.watermark = Some(lightcraft_engine::export::Watermark { text: "© LightCraft".into(), ..Default::default() });
+            opts.watermark = Some(lightcraft_engine::export::Watermark { text: "© Fotofficina".into(), ..Default::default() });
         }
         let t0 = Instant::now();
         while preview(&mut h).is_none() && t0.elapsed() < Duration::from_secs(30) {

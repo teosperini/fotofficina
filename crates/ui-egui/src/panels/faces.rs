@@ -406,7 +406,7 @@ pub fn model_dialog(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, info
         ui.label(RichText::new("This file cannot be used yet").font(t.semibold(13.5)).color(t.caution));
         ui.add(
             egui::Label::new(
-                RichText::new(sentence(info["reason"].as_str().unwrap_or("It is not a face recognition model LightCraft understands")))
+                RichText::new(sentence(info["reason"].as_str().unwrap_or("It is not a face recognition model Fotofficina understands")))
                     .color(t.text_label),
             )
             .wrap(),
@@ -429,7 +429,7 @@ pub fn model_dialog(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, info
         ui.add(
             egui::Label::new(
                 RichText::new(format!(
-                    "Downloads from {host}. Once it has arrived and checked out, LightCraft installs it{}.",
+                    "Downloads from {host}. Once it has arrived and checked out, Fotofficina installs it{}.",
                     if detector { "" } else { ", starts using it and turns face recognition on" }
                 ))
                 .color(t.text_label),
@@ -449,7 +449,7 @@ pub fn model_dialog(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, info
     }
     if kind == "draft" {
         ui.add_space(2.0);
-        ui.label(RichText::new("LightCraft does not know this model, so it assumed:").color(t.text_label));
+        ui.label(RichText::new("Fotofficina does not know this model, so it assumed:").color(t.text_label));
         for a in info["assumptions"].as_array().into_iter().flatten().filter_map(Value::as_str) {
             ui.add(egui::Label::new(RichText::new(format!("•  {a}")).font(t.font(12.0)).color(t.text_dim)).wrap());
         }
@@ -464,9 +464,9 @@ pub fn model_dialog(app: &mut LightcraftApp, ui: &mut egui::Ui, t: &Tokens, info
     ui.add_space(4.0);
     check(ui, "faceModel.accept", accepted, "I have read these terms and accept them for my own use");
     let closing = if download {
-        "Nothing is fetched until you accept. The model is kept on this computer only; LightCraft never uploads or shares it."
+        "Nothing is fetched until you accept. The model is kept on this computer only; Fotofficina never uploads or shares it."
     } else {
-        "The model is kept on this computer only. LightCraft never uploads or shares it."
+        "The model is kept on this computer only. Fotofficina never uploads or shares it."
     };
     ui.label(RichText::new(closing).font(t.font(11.5)).color(t.text_dim));
 }

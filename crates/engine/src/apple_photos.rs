@@ -38,7 +38,7 @@ use crate::activity::{Activity, Cancel, TaskGuard};
 /// folders are never used. None there: a new top-level album is made. More than one: nothing is
 /// imported (error [`AMBIGUOUS_ALBUM`]).
 pub const SCRIPT: &str = r#"on run argv
-	if (count of argv) < 3 then error "LightCraft: no files to import" number -50
+	if (count of argv) < 3 then error "Fotofficina: no files to import" number -50
 	set albumName to item 2 of argv
 	set mediaFiles to {}
 	repeat with i from 3 to (count of argv)
@@ -63,7 +63,7 @@ pub const SCRIPT: &str = r#"on run argv
 					end considering
 					if sameName and candidateParent is missing value then set end of topLevel to contents of candidate
 				end repeat
-				if (count of topLevel) > 1 then error "LightCraft: several top-level albums have this name" number 23601
+				if (count of topLevel) > 1 then error "Fotofficina: several top-level albums have this name" number 23601
 				if (count of topLevel) is 1 then
 					set targetAlbum to item 1 of topLevel
 				else
@@ -845,9 +845,9 @@ mod tests {
         assert!(filter.contains("parent of candidate") && filter.contains("candidateParent is missing value"), "{filter}");
         assert!(filter.contains("considering case"), "exact names: {filter}");
         assert!(filter.contains(&format!(
-            "if (count of topLevel) > 1 then error \"LightCraft: several top-level albums have this name\" number {AMBIGUOUS_ALBUM}"
+            "if (count of topLevel) > 1 then error \"Fotofficina: several top-level albums have this name\" number {AMBIGUOUS_ALBUM}"
         )));
-        let m = explain(&failed(&format!("execution error: LightCraft: several top-level albums have this name ({AMBIGUOUS_ALBUM})")), "Trip");
+        let m = explain(&failed(&format!("execution error: Fotofficina: several top-level albums have this name ({AMBIGUOUS_ALBUM})")), "Trip");
         assert!(m.contains("More than one album at the top level of Photos is named “Trip”") && m.contains("nothing was added"), "{m}");
     }
 
