@@ -12,7 +12,6 @@ pub(crate) mod convert;
 mod cull;
 pub mod curves;
 pub(crate) mod denoise;
-mod rawrefinery;
 mod develop;
 mod edit;
 mod export;
@@ -34,6 +33,7 @@ mod prefs;
 mod preset_files;
 pub mod previews;
 mod query;
+mod rawrefinery;
 mod sync;
 mod xmp;
 

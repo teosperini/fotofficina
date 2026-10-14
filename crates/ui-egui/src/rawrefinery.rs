@@ -16,9 +16,31 @@ use crate::widgets::register;
 /// How long the end-of-run message stays (it can say what went wrong).
 const TOAST_SECONDS: f64 = 8.0;
 
-/// The button under AI Denoise: denoise this photo's original raw with RawRefinery.
+/// Which model the button uses: an index into the engine's `MODELS`, remembered between runs of the app.
+fn model_slot() -> egui::Id {
+    egui::Id::new("rawrefinery:model")
+}
+
+fn chosen_model(ctx: &egui::Context) -> usize {
+    let n = lightcraft_engine::rawrefinery::MODELS.len();
+    ctx.data_mut(|d| d.get_persisted::<usize>(model_slot())).filter(|i| *i < n).unwrap_or(0)
+}
+
+/// The model menu and the button under AI Denoise: denoise this photo's original raw with RawRefinery.
 pub(crate) fn detail_button(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     egui::Frame::NONE.inner_margin(Margin { left: 24, right: 22, top: 2, bottom: 6 }).show(ui, |ui| {
+        let models = lightcraft_engine::rawrefinery::MODELS;
+        let mut index = chosen_model(ui.ctx());
+        ui.horizontal(|ui| {
+            ui.label(crate::i18n::tr("Model"));
+            egui::ComboBox::from_id_salt("rawrefinery-model").width(120.0).selected_text(crate::i18n::tr(models[index].1)).show_ui(ui, |ui| {
+                for (i, (_, label, what)) in models.iter().enumerate() {
+                    ui.selectable_value(&mut index, i, format!("{} — {}", crate::i18n::tr(label), crate::i18n::tr(what)));
+                }
+            });
+        });
+        ui.label(egui::RichText::new(crate::i18n::tr(models[index].2)).small().weak());
+        ui.ctx().data_mut(|d| d.insert_persisted(model_slot(), index));
         let working = lightcraft_engine::rawrefinery::workers() > 0;
         let r = ui
             .add_enabled(!working, egui::Button::new(crate::i18n::tr("Denoise with RawRefinery…")).small())
@@ -33,7 +55,7 @@ pub(crate) fn detail_button(app: &mut LightcraftApp, ui: &mut egui::Ui, id: Phot
 }
 
 fn start(app: &mut LightcraftApp, ctx: &egui::Context, id: PhotoId) {
-    match app.run("photo.rawrefineryDenoise", json!({"ids": [id.0]})) {
+    match app.run("photo.rawrefineryDenoise", json!({"ids": [id.0], "model": lightcraft_engine::rawrefinery::MODELS[chosen_model(ctx)].0})) {
         Ok(v) if v["started"].as_u64() == Some(0) => {
             let why = v["skipped"][0][1].as_str().unwrap_or("nothing to denoise");
             app.toast_for(ctx, format!("RawRefinery: {why}"), TOAST_SECONDS);
@@ -52,7 +74,11 @@ pub(crate) fn pump(app: &mut LightcraftApp, ctx: &egui::Context) {
     let count = |key: &str| report[key].as_array().map_or(0, Vec::len);
     let (made, failed, skipped) = (count("made"), count("failed"), count("skipped"));
     if made > 0 {
-        let text = if made == 1 { "Denoised with RawRefinery: the result is stacked with the original".to_string() } else { format!("Denoised {made} photos with RawRefinery: each result is stacked with its original") };
+        let text = if made == 1 {
+            "Denoised with RawRefinery: the result is stacked with the original".to_string()
+        } else {
+            format!("Denoised {made} photos with RawRefinery: each result is stacked with its original")
+        };
         app.toast_for(ctx, text, TOAST_SECONDS);
     }
     if failed > 0 {

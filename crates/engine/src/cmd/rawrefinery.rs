@@ -50,6 +50,8 @@ fn refusal(ph: &lightcraft_catalog::Photo) -> Option<&'static str> {
 fn start(s: &mut Session, p: &Value) -> Result<Value> {
     const C: &str = "photo.rawrefineryDenoise";
     let explicit_dir = str_param(p, "dir").filter(|d| !d.is_empty()).map(PathBuf::from);
+    let model = str_param(p, "model").filter(|m| !m.is_empty());
+    let folder = rr::out_folder(model);
     let mut jobs = Vec::new();
     let mut skipped = Vec::new();
     for id in s.targets(p) {
@@ -60,7 +62,7 @@ fn start(s: &mut Session, p: &Value) -> Result<Value> {
         }
         let Source::File { path } = &ph.source else { continue };
         let input = PathBuf::from(path);
-        let out_dir = explicit_dir.clone().unwrap_or_else(|| input.parent().unwrap_or(Path::new("")).join(rr::DEFAULT_OUT_FOLDER));
+        let out_dir = explicit_dir.clone().unwrap_or_else(|| input.parent().unwrap_or(Path::new("")).join(&folder));
         jobs.push(Job { source: id, input, out_dir });
     }
     if jobs.is_empty() {
@@ -73,7 +75,7 @@ fn start(s: &mut Session, p: &Value) -> Result<Value> {
         return Err(bad(C, "blend is a percentage from 0 to 100"));
     }
     let template = Request {
-        model: str_param(p, "model").filter(|m| !m.is_empty()).map(str::to_string),
+        model: model.map(str::to_string),
         iso: number("iso"),
         blend,
         device: str_param(p, "device").filter(|d| !d.is_empty()).map(str::to_string),
@@ -123,7 +125,9 @@ fn work(cli: &Path, groups: Vec<(PathBuf, Vec<Job>)>, template: &Request, task: 
         let result = rr::run(cli, &request, &|| task.is_cancelled(), &mut |event| match event {
             Event::Start { file, .. } => task.detail(&Path::new(&file).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(file)),
             Event::Done { file, output } => settle(&file, &|source| Outcome::Made { source, output: PathBuf::from(&output), existing: false }),
-            Event::Skipped { file, output: Some(output), .. } => settle(&file, &|source| Outcome::Made { source, output: PathBuf::from(&output), existing: true }),
+            Event::Skipped { file, output: Some(output), .. } => {
+                settle(&file, &|source| Outcome::Made { source, output: PathBuf::from(&output), existing: true })
+            }
             Event::Skipped { file, reason, .. } => settle(&file, &|source| Outcome::Skipped { source, reason: reason.clone() }),
             Event::Error { file: Some(file), message } => settle(&file, &|source| Outcome::Failed { source: Some(source), message: message.clone() }),
             Event::Error { file: None, message } => rr::push(Outcome::Failed { source: None, message }),
@@ -135,7 +139,11 @@ fn work(cli: &Path, groups: Vec<(PathBuf, Vec<Job>)>, template: &Request, task: 
             Err(e) => e,
         };
         for source in by_input.into_values() {
-            let outcome = if why == "cancelled" { Outcome::Skipped { source, reason: why.clone() } } else { Outcome::Failed { source: Some(source), message: why.clone() } };
+            let outcome = if why == "cancelled" {
+                Outcome::Skipped { source, reason: why.clone() }
+            } else {
+                Outcome::Failed { source: Some(source), message: why.clone() }
+            };
             rr::push(outcome);
         }
         if why == "cancelled" {
@@ -209,7 +217,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Denoise with RawRefinery…",
             ["Photo"],
             None,
-            "{ids?, dir?, model?, iso?, blend?, device?, cli?} → {started, skipped: [[id, why]], dirs} — denoise the original raw of each selected photo with RawRefinery (separate program, `rawrefinery-cli`, found via `cli`, FOTOFFICINA_RAWREFINERY_CLI, rawrefinery.json in the settings folder or the PATH) in the background. Each result is a new NAME_denoised.dng in `dir` (default: a Denoised folder next to the original); the original is never changed. Finished files are imported, stacked on top of the original and given its settings by rawrefinery.pump. iso: noise level (default: each photo's own); blend: percent of the original mixed back in (0–100)",
+            "{ids?, dir?, model?, iso?, blend?, device?, cli?} → {started, skipped: [[id, why]], dirs} — denoise the original raw of each selected photo with RawRefinery (separate program, `rawrefinery-cli`, found via `cli`, FOTOFFICINA_RAWREFINERY_CLI, rawrefinery.json in the settings folder or the PATH) in the background. Each result is a new NAME_denoised.dng in `dir` (default: a Denoised folder next to the original (Denoised (Light) / Denoised (Super Light) for the other models)); the original is never changed. Finished files are imported, stacked on top of the original and given its settings by rawrefinery.pump. iso: noise level (default: each photo's own); blend: percent of the original mixed back in (0–100)",
             has_selection,
             start
         ),

@@ -27,6 +27,24 @@ pub const CONFIG_FILE: &str = "rawrefinery.json";
 const CLI_NAME: &str = "rawrefinery-cli";
 /// The folder, next to the original, that holds the denoised files.
 pub const DEFAULT_OUT_FOLDER: &str = "Denoised";
+
+/// The denoise models of RawRefinery: (name the program knows, short label, what changes). The first is the default.
+pub const MODELS: &[(&str, &str, &str)] = &[
+    ("Tree Net Denoise", "Standard", "Best quality, slowest"),
+    ("Tree Net Denoise Light", "Light", "Faster, a little softer"),
+    ("Tree Net Denoise Super Light", "Super Light", "Fastest, keeps most of the detail"),
+];
+
+/// The folder for the results of `model` (`None` or the default model: [`DEFAULT_OUT_FOLDER`]). Each model has its
+/// own folder, because the program never overwrites a result: with one shared folder, trying another model would
+/// silently give back the first model's file.
+pub fn out_folder(model: Option<&str>) -> String {
+    match MODELS.iter().skip(1).find(|(name, _, _)| Some(*name) == model) {
+        Some((_, label, _)) => format!("{DEFAULT_OUT_FOLDER} ({label})"),
+        None => DEFAULT_OUT_FOLDER.to_string(),
+    }
+}
+
 /// How long a message of the program's stderr is kept when explaining a failure.
 const MAX_LINE: usize = 300;
 
@@ -195,9 +213,19 @@ fn stderr_tail(stderr: Option<impl Read>) -> Vec<String> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Outcome {
     /// `existing`: the file was already there from an earlier run, nothing was made now.
-    Made { source: PhotoId, output: PathBuf, existing: bool },
-    Skipped { source: PhotoId, reason: String },
-    Failed { source: Option<PhotoId>, message: String },
+    Made {
+        source: PhotoId,
+        output: PathBuf,
+        existing: bool,
+    },
+    Skipped {
+        source: PhotoId,
+        reason: String,
+    },
+    Failed {
+        source: Option<PhotoId>,
+        message: String,
+    },
 }
 
 static QUEUE: OnceLock<Mutex<Vec<Outcome>>> = OnceLock::new();
@@ -244,6 +272,15 @@ impl Drop for Running {
 
 #[cfg(all(test, unix))]
 mod tests {
+    #[test]
+    fn each_model_has_its_own_results_folder() {
+        assert_eq!(super::out_folder(None), "Denoised");
+        assert_eq!(super::out_folder(Some("Tree Net Denoise")), "Denoised");
+        assert_eq!(super::out_folder(Some("Tree Net Denoise Light")), "Denoised (Light)");
+        assert_eq!(super::out_folder(Some("Tree Net Denoise Super Light")), "Denoised (Super Light)");
+        assert!(super::MODELS.iter().all(|(name, _, _)| name.starts_with("Tree Net Denoise")));
+    }
+
     use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -266,13 +303,19 @@ mod tests {
             parse_event(r#"{"event": "start", "file": "a.CR2", "index": 1, "total": 3, "output": "x"}"#),
             Some(Event::Start { file: "a.CR2".into(), index: 1, total: 3 })
         );
-        assert_eq!(parse_event(r#"{"event":"done","file":"a","output":"/o/a_denoised.dng","seconds":1.5}"#), Some(Event::Done { file: "a".into(), output: "/o/a_denoised.dng".into() }));
+        assert_eq!(
+            parse_event(r#"{"event":"done","file":"a","output":"/o/a_denoised.dng","seconds":1.5}"#),
+            Some(Event::Done { file: "a".into(), output: "/o/a_denoised.dng".into() })
+        );
         assert_eq!(
             parse_event(r#"{"event":"skipped","file":"a","reason":"output already exists","output":"/o/a.dng"}"#),
             Some(Event::Skipped { file: "a".into(), output: Some("/o/a.dng".into()), reason: "output already exists".into() })
         );
         assert_eq!(parse_event(r#"{"event":"error","message":"boom"}"#), Some(Event::Error { file: None, message: "boom".into() }));
-        assert_eq!(parse_event(r#"{"event":"finished","total":2,"done":1,"skipped":1,"failed":0}"#), Some(Event::Finished { done: 1, skipped: 1, failed: 0 }));
+        assert_eq!(
+            parse_event(r#"{"event":"finished","total":2,"done":1,"skipped":1,"failed":0}"#),
+            Some(Event::Finished { done: 1, skipped: 1, failed: 0 })
+        );
         for junk in ["", "Using Device mps", "[1, 2]", r#"{"event":"mystery"}"#, r#"{"event":"done"}"#, r#"{"no":"event"}"#] {
             assert_eq!(parse_event(junk), None, "{junk:?}");
         }
