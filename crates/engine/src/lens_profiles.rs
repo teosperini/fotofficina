@@ -14,11 +14,18 @@ use lightcraft_lensdb::{LensDb, Shot};
 /// The environment variable naming the lens database directory.
 pub const ENV: &str = "LIGHTCRAFT_LENSFUN_DIR";
 
+/// Fotofficina addition: the `lensfun` folder in the settings folder, used when [`ENV`] is not set (an app started
+/// from the Dock has no shell variables).
+fn settings_folder_database() -> Option<PathBuf> {
+    let dir = crate::config::config_dir()?.join("lensfun");
+    dir.is_dir().then_some(dir)
+}
+
 /// The configured database, read once per process; `None` when none is configured or it holds no lenses.
 pub fn database() -> Option<&'static LensDb> {
     static DB: OnceLock<Option<LensDb>> = OnceLock::new();
     DB.get_or_init(|| {
-        let dir = PathBuf::from(std::env::var_os(ENV)?);
+        let dir = std::env::var_os(ENV).map(PathBuf::from).or_else(settings_folder_database)?;
         match LensDb::load_dir(&dir) {
             Ok((db, errors)) => {
                 for (file, e) in errors {

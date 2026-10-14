@@ -39,6 +39,7 @@ pub mod tasks;
 pub mod text_field;
 pub mod theme;
 pub mod titlebar;
+mod versions;
 pub mod widgets;
 
 #[cfg(test)]

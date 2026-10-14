@@ -132,6 +132,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             });
         });
     });
+    crate::versions::strip(app, ui, id);
     if let Some(why) = &preview_only {
         egui::Frame::NONE.inner_margin(egui::Margin { left: 24, right: 22, top: 0, bottom: 12 }).show(ui, |ui| {
             crate::widgets::preview_only_notice(ui, "edit", why);
