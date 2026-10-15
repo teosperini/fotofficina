@@ -67,6 +67,26 @@ fn frame_crop_factor(camera: Option<f64>, focal: f64, focal_35mm: Option<f64>) -
     }
 }
 
+/// Fotofficina addition: which profile a photo's lens corrections come from, for the Optics panel (so the user can
+/// check the right lens was found): the database lens's name, else "embedded in the file". `None` when the photo
+/// has no lens correction at all. Built from the catalog's own fields, no file is read.
+pub fn describe(ph: &lightcraft_catalog::Photo) -> Option<String> {
+    ph.embedded_lens.as_ref()?;
+    let embedded = || Some("Embedded in the file".to_string());
+    let Some(db) = database() else { return embedded() };
+    let camera_name = ph.meta.camera.trim();
+    let make = camera_name.split_whitespace().next().unwrap_or_default();
+    let meta = lightcraft_meta::Metadata { make: Some(make.to_string()), model: Some(camera_name.to_string()), ..Default::default() };
+    let camera = db.find_camera(meta.make.as_deref().unwrap_or_default(), meta.model.as_deref().unwrap_or_default());
+    let lens_name = ph.meta.lens.trim();
+    if lens_name.is_empty() {
+        return embedded();
+    }
+    let Some(lens) = db.find_lens(None, lens_name, camera) else { return embedded() };
+    let model = lens.models.first()?;
+    Some(if model.to_lowercase().contains(&lens.maker.to_lowercase()) { model.clone() } else { format!("{} {model}", lens.maker) })
+}
+
 /// [`crate::files::embedded_lens`], else the database profile ([`lookup`]) for a raw with metadata `meta`.
 pub fn for_raw(raw: &lightcraft_raw::RawInfo, meta: impl FnOnce() -> lightcraft_meta::Metadata) -> Option<EmbeddedLens> {
     crate::files::embedded_lens(raw).or_else(|| {

@@ -374,6 +374,15 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
                 };
                 let _ = app.run("develop.merge", json!({"settings": settings, "label": "Lens Corrections"}));
             }
+            if has_lens && let Some(name) = app.session.catalog.photo(id).and_then(|p| lightcraft_engine::lens_profiles::describe(p)) {
+                // as Lightroom does: which profile was found, as a check that it is the right lens
+                let text = if name == "Embedded in the file" {
+                    format!("{} {}", crate::i18n::tr("Lens profile:"), crate::i18n::tr("embedded in the file"))
+                } else {
+                    format!("{} {name}", crate::i18n::tr("Lens profile:"))
+                };
+                ui.add(egui::Label::new(egui::RichText::new(text).size(11.0).color(Tokens::get(ui.ctx()).text_dim)).truncate());
+            }
             if lp && !has_lens {
                 ui.label(
                     egui::RichText::new(crate::i18n::tr("No lens data embedded in this file (DNG lens opcodes only)."))
