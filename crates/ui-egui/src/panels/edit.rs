@@ -102,6 +102,7 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     if app.ui.soft_proof {
         soft_proofing(app, ui, id);
     }
+    crate::versions::lens_line(app, ui, id);
     // header: Edit + Auto / B&W / HDR
     let mut reset_clicked = false;
     let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 40.0), Sense::hover());
@@ -365,7 +366,13 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
             }
             let mut lp = d.optics.lens_profile;
             if ui.checkbox(&mut lp, crate::i18n::tr("Enable Lens Corrections")).changed() {
-                let _ = app.run("develop.merge", json!({"settings": {"optics": {"lens_profile": lp}}, "label": "Lens Corrections"}));
+                // turning the correction on also keeps the crop inside the corrected picture (no white edges)
+                let settings = if lp {
+                    json!({"optics": {"lens_profile": lp}, "geometry": {"constrain_crop": true}})
+                } else {
+                    json!({"optics": {"lens_profile": lp}})
+                };
+                let _ = app.run("develop.merge", json!({"settings": settings, "label": "Lens Corrections"}));
             }
             if lp && !has_lens {
                 ui.label(

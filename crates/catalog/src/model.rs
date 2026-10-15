@@ -417,6 +417,8 @@ impl Photo {
         }
         if self.embedded_lens.is_some() {
             d.optics.lens_profile = true;
+            // Fotofficina: no white edges where the correction pulls the frame in
+            d.geometry.constrain_crop = true;
         }
         d.process = self.develop.process;
         d

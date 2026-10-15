@@ -63,3 +63,17 @@ pub(crate) fn strip(app: &mut LightcraftApp, ui: &mut egui::Ui, active: PhotoId)
         let _ = app.run("library.select", json!({"ids": [id.0], "active": id.0}));
     }
 }
+
+/// The lens of the photo being edited, always in view (a Fotofficina addition): what the lens corrections and the
+/// edits are for. Under the exposure line of the histogram.
+pub(crate) fn lens_line(app: &LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
+    let Some(photo) = app.session.catalog.photo(id) else { return };
+    let t = crate::theme::Tokens::get(ui.ctx());
+    let lens = photo.meta.lens.trim();
+    let text = if lens.is_empty() { crate::i18n::tr("Lens: unknown").to_string() } else { lens.to_string() };
+    ui.add_space(4.0);
+    ui.vertical_centered(|ui| {
+        ui.add(egui::Label::new(RichText::new(text).font(t.font(12.5)).color(t.text_label)).truncate())
+            .on_hover_text(crate::i18n::tr("The lens this photo was taken with (from the file)"));
+    });
+}
