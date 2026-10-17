@@ -91,8 +91,7 @@ pub fn describe(ph: &lightcraft_catalog::Photo) -> Option<String> {
 pub fn for_raw(raw: &lightcraft_raw::RawInfo, meta: impl FnOnce() -> lightcraft_meta::Metadata) -> Option<EmbeddedLens> {
     crate::files::embedded_lens(raw).or_else(|| {
         let db = database()?;
-        let c = raw.crop.clipped(raw.active_area.width, raw.active_area.height);
-        let (w, h) = if c.width == 0 || c.height == 0 { (raw.active_area.width, raw.active_area.height) } else { (c.width, c.height) };
+        let (w, h) = raw.developed_size();
         lookup(db, &meta(), w as f64, h as f64, raw.orientation)
     })
 }

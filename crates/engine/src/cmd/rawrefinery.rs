@@ -54,7 +54,7 @@ fn start(s: &mut Session, p: &Value) -> Result<Value> {
     let folder = rr::out_folder(model);
     let mut jobs = Vec::new();
     let mut skipped = Vec::new();
-    for id in s.targets(p) {
+    for id in s.targets(p)? {
         let Some(ph) = s.catalog.photo(id) else { continue };
         if let Some(why) = refusal(ph) {
             skipped.push(json!([id.0, why]));
