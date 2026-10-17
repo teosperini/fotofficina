@@ -419,6 +419,12 @@ fn section_header(app: &mut LightcraftApp, ui: &mut egui::Ui, section: SidebarSe
     // what is visible of the header: its bar and count end at the panel's edge, like a row's
     let edge = r.right().min(visible_right(ui));
     let hovered = resp.hovered() && app.ui.dragging_section.is_none();
+    // Fotofficina: the header is a band a little lighter than the rows under it, the open section with an accent bar
+    let band = Rect::from_min_max(r.min, pos2(edge.max(r.left()), r.bottom()));
+    ui.painter().rect_filled(band, 0.0, t.chrome.lerp_to_gamma(t.text, if open { 0.07 } else { 0.045 }));
+    if open {
+        ui.painter().rect_filled(Rect::from_min_max(band.min, pos2(band.left() + 3.0, band.bottom())), 0.0, t.accent);
+    }
     if hovered {
         let bar = Rect::from_min_max(r.min + vec2(8.0, 2.0), pos2((edge - 8.0).max(r.left() + 8.0), r.bottom() - 2.0));
         ui.painter().rect_filled(bar, 4.0, t.hover.gamma_multiply(0.6));
@@ -427,7 +433,7 @@ fn section_header(app: &mut LightcraftApp, ui: &mut egui::Ui, section: SidebarSe
     register(ui.ctx(), format!("{widget}Chevron:{id}"), Rect::from_center_size(c, vec2(16.0, 16.0)));
     let col = if hovered { t.text } else { t.text_dim };
     paint(ui.painter(), Rect::from_center_size(c, vec2(16.0, 16.0)), if open { Icon::ChevronDown } else { Icon::ChevronRight }, col);
-    ui.painter().text(pos2(r.left() + 18.0, r.center().y), Align2::LEFT_CENTER, title, t.semibold(13.5), t.text_label);
+    ui.painter().text(pos2(r.left() + 18.0, r.center().y), Align2::LEFT_CENTER, title, t.semibold(13.5), if open { t.text } else { t.text_label });
     let button = header_button(section);
     // (an album being dragged puts "Top Level" in the Albums header)
     let room = !(section == SidebarSection::Albums && app.ui.dragging_album.is_some());

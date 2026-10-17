@@ -573,12 +573,18 @@ pub fn section_header(ui: &mut Ui, id: &str, title: &str, open: bool, enabled: O
     resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::CollapsingHeader, true, open, title));
     register(ui.ctx(), format!("section:{id}"), r);
     let p = ui.painter();
+    // Fotofficina: a header is a band a little lighter than the section body, and the open one has an accent bar,
+    // so it is clear where one section ends and the next begins
+    p.rect_filled(r, 0.0, t.chrome.lerp_to_gamma(t.text, if open { 0.07 } else { 0.045 }));
+    if open {
+        p.rect_filled(Rect::from_min_max(r.min, pos2(r.left() + 3.0, r.bottom())), 0.0, t.accent);
+    }
     if ui.rect_contains_pointer(r) {
-        p.rect_filled(r, 0.0, t.chrome.gamma_multiply(1.06));
+        p.rect_filled(r, 0.0, t.chrome.gamma_multiply(1.06).gamma_multiply(0.5));
     }
     let chev = Rect::from_center_size(pos2(r.left() + 30.0, r.center().y), vec2(16.0, 16.0));
     paint(p, chev, if open { Icon::ChevronDown } else { Icon::ChevronRight }, t.text_label);
-    p.text(pos2(r.left() + 44.0, r.center().y), Align2::LEFT_CENTER, title, t.semibold(14.0), t.text);
+    p.text(pos2(r.left() + 44.0, r.center().y), Align2::LEFT_CENTER, title, t.semibold(14.0), if open { t.text } else { t.text_label });
     let mut toggled = None;
     // shown while the pointer is anywhere on the header: `resp.hovered()` turns false as soon as the
     // pointer is over the eye itself (the eye is on top), which hid the eye before it could be
