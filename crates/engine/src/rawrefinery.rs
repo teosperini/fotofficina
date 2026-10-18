@@ -122,6 +122,37 @@ pub struct Request {
     pub device: Option<String>,
 }
 
+/// `exiftool`, which RawRefinery needs too: on the `PATH`, else where Homebrew puts it (an app started from the Dock has
+/// no shell `PATH`).
+fn find_exiftool() -> Option<PathBuf> {
+    let path_dirs = std::env::var_os("PATH").map(|p| std::env::split_paths(&p).collect::<Vec<_>>()).unwrap_or_default();
+    let extra = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"].map(PathBuf::from);
+    path_dirs.into_iter().chain(extra).map(|d| d.join("exiftool")).find(|p| p.is_file())
+}
+
+/// Give a finished result the look of its original (see [`crate::files::look_of_original`]): the original's tone curve
+/// and an exposure that makes them show the same brightness, written into the DNG as `ProfileToneCurve` and
+/// `BaselineExposure`, so Fotofficina shows the two alike instead of showing the DNG flat and dark. Never fails the
+/// run: without exiftool, or for an original that has no fitted look, the result is left as it is. Returns what it
+/// wrote, for the log.
+pub fn match_look(original: &Path, result: &Path) -> Option<String> {
+    let exiftool = find_exiftool()?;
+    let (original_bytes, result_bytes) = (std::fs::read(original).ok()?, std::fs::read(result).ok()?);
+    let (tone, ev) = crate::files::look_of_original(&original_bytes, &result_bytes)?;
+    let curve = tone.iter().map(|[x, y]| format!("{x:.6} {y:.6}")).collect::<Vec<_>>().join(" ");
+    let status = Command::new(exiftool)
+        .args(["-q", "-overwrite_original"])
+        .arg(format!("-IFD0:ProfileToneCurve={curve}"))
+        .arg(format!("-IFD0:BaselineExposure={ev:.3}"))
+        .arg(result)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .ok()?;
+    status.success().then(|| format!("tone curve of {} points, {ev:+.2} EV", tone.len()))
+}
+
 /// Run `rawrefinery-cli` and hand every event to `on_event` as it arrives. Stops the program when `cancelled()` turns
 /// true (`Err("cancelled")`). An error means the program could not do its job at all (it didn't start, or ended
 /// without saying it had finished); a failure of one photo arrives as an [`Event::Error`] and is not an `Err`.

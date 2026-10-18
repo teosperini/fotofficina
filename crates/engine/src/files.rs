@@ -663,6 +663,52 @@ fn matte_kind(name: &str) -> Option<lightcraft_pipeline::masks::MatteKind> {
     })
 }
 
+/// Fotofficina addition: the tone curve a raw file starts from (the camera's look, fitted to the JPEG the file carries),
+/// as the finish stage applies it. A RawRefinery result is a DNG, which gets no look of its own; this curve, written
+/// into it ([`look_of_original`]), gives it its original's tone. `None` for a file that is not a raw, or has no fitted
+/// look (a DNG carries its own).
+fn fitted_tone(bytes: &[u8]) -> Option<lightcraft_pipeline::tone::CameraTone> {
+    lightcraft_raw::probe(bytes)?;
+    let mut raw = lightcraft_raw::decode(bytes).ok()?;
+    let info = raw.info();
+    let lens = crate::lens_profiles::for_raw(&info, || lightcraft_meta::extract(bytes));
+    let lens_geometry = crate::camera_preview::lens_geometry(&raw.opcodes.list3);
+    raw.opcodes.list3.retain(|op| !op.is_lens_correction());
+    let (_, _, look) = crate::camera_preview::starting_colour(&mut raw, bytes, lens_geometry.as_ref(), lens.as_ref());
+    look.map(|l| l.tone)
+}
+
+/// Average linear luminance samples of a raw, decoded small (about 20 000 of them, every n-th pixel).
+fn luminance_samples(bytes: &[u8]) -> Option<Vec<f32>> {
+    let (img, _, _) = load_bytes_now(std::borrow::Cow::Borrowed(bytes), 512, None).ok()?;
+    let step = (img.data.len() / 20_000).max(1);
+    Some(img.data.iter().step_by(step).map(|p| 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]).collect())
+}
+
+/// Fotofficina addition: what a RawRefinery result needs so it looks like its original in Fotofficina: the original's
+/// tone curve, as `[scene-linear in, display-linear out]` points (the domain of a DNG `ProfileToneCurve`, sampled the
+/// way [`dng_tone_curve`] reads one back), and the exposure (EV) that makes the two show the same average brightness
+/// (the camera's colour matrices and the DNG's are not scaled alike: about +0.3 EV on a 6D Mark II). `None` when the
+/// original has no fitted look. Both files are decoded small, so it costs a second or two.
+pub fn look_of_original(original: &[u8], result: &[u8]) -> Option<(Vec<[f32; 2]>, f64)> {
+    let tone = fitted_tone(original)?;
+    let mut points = vec![[0.0, 0.0]];
+    points.extend((0..48).map(|i| {
+        let x = 2f32.powf(-12.0 + 12.0 * i as f32 / 47.0);
+        [x, tone.apply(x).clamp(0.0, 1.0)]
+    }));
+    let (a, b) = (luminance_samples(original)?, luminance_samples(result)?);
+    let shown = |samples: &[f32], gain: f32| samples.iter().map(|y| f64::from(tone.apply(y * gain))).sum::<f64>() / samples.len().max(1) as f64;
+    let target = shown(&a, 1.0);
+    // the gain that makes the result's displayed average equal the original's (the average grows with the gain)
+    let (mut lo, mut hi) = (-1.5f32, 1.5f32);
+    for _ in 0..24 {
+        let mid = (lo + hi) / 2.0;
+        if shown(&b, 2f32.powf(mid)) < target { lo = mid } else { hi = mid }
+    }
+    Some((points, f64::from((lo + hi) / 2.0)))
+}
+
 /// A DNG `ProfileToneCurve` (linear in, linear out, 1.0 = white after exposure compensation) as the
 /// finish stage's camera tone curve: 32 knots, log-spaced over 12 stops below white; above white
 /// the camera tone's shoulder continues it.

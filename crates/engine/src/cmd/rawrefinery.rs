@@ -124,7 +124,13 @@ fn work(cli: &Path, groups: Vec<(PathBuf, Vec<Job>)>, template: &Request, task: 
         };
         let result = rr::run(cli, &request, &|| task.is_cancelled(), &mut |event| match event {
             Event::Start { file, .. } => task.detail(&Path::new(&file).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(file)),
-            Event::Done { file, output } => settle(&file, &|source| Outcome::Made { source, output: PathBuf::from(&output), existing: false }),
+            Event::Done { file, output } => {
+                // the result gets its original's look before it is imported (see `rawrefinery::match_look`)
+                if let Some(what) = rr::match_look(Path::new(&file), Path::new(&output)) {
+                    log::info!("RawRefinery: {output} given the look of {file}: {what}");
+                }
+                settle(&file, &|source| Outcome::Made { source, output: PathBuf::from(&output), existing: false })
+            }
             Event::Skipped { file, output: Some(output), .. } => {
                 settle(&file, &|source| Outcome::Made { source, output: PathBuf::from(&output), existing: true })
             }
