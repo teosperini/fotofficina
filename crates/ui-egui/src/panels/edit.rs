@@ -107,6 +107,19 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     let mut reset_clicked = false;
     let (hr, _) = ui.allocate_exact_size(vec2(ui.available_width(), 40.0), Sense::hover());
     ui.painter().text(pos2(hr.left() + 24.0, hr.bottom() - 10.0), Align2::LEFT_CENTER, crate::i18n::tr("Edit"), t.semibold(15.0), t.text);
+    // Fotofficina: the accordion (Solo Mode) one click away, on the title line (it is also in Window ▸ Edit Sections)
+    let solo_rect = Rect::from_min_size(pos2(hr.right() - 22.0 - 52.0, hr.bottom() - 28.0), vec2(52.0, 24.0));
+    let solo = app.ui.single_panel;
+    let clicked = ui
+        .scope_builder(egui::UiBuilder::new().max_rect(solo_rect), |ui| {
+            text_button(ui, "solo", crate::i18n::tr("Solo"), solo)
+                .on_hover_text(crate::i18n::tr("Solo Mode: opening a section closes the others"))
+                .clicked()
+        })
+        .inner;
+    if clicked {
+        let _ = app.run("view.soloSections", json!({"on": !solo}));
+    }
     egui::Frame::NONE.inner_margin(egui::Margin { left: 24, right: 22, top: 8, bottom: 14 }).show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 8.0;

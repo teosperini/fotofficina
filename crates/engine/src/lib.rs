@@ -411,7 +411,7 @@ impl Session {
             catalog: Catalog::new(),
             source: LibrarySource::All,
             filter: Filter::default(),
-            sort: Sort::default(),
+            sort: Sort { ascending: true, ..Sort::default() }, // Fotofficina: oldest first by default
             selection: Selection::default(),
             visible: Vec::new().into(),
             visible_key: None,
@@ -506,6 +506,7 @@ impl Session {
     /// A session with the procedurally generated demo library loaded.
     pub fn with_demo() -> Session {
         let mut s = Session::new();
+        s.sort.ascending = false; // the demo library (and the tests built on it) stays newest first
         demo::load(&mut s);
         s
     }

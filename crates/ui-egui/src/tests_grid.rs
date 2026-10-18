@@ -21,6 +21,7 @@ const N: u64 = 3000;
 /// fifth; a three-photo stack every 100 photos.
 fn library() -> Session {
     let mut s = Session::new();
+    s.sort.ascending = false; // these tests read the newest day first
     for i in 0..N {
         let (w, h) = if i % 5 == 4 { (4000, 6000) } else { (6000, 4000) };
         let path = format!("/lightcraft-grid-test/IMG_{i:05}.jpg");

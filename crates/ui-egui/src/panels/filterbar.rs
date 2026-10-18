@@ -12,8 +12,6 @@ use crate::theme::Tokens;
 use crate::widgets::register;
 
 pub const HEIGHT: f32 = 40.0;
-/// Bar width (points) below which the controls take two rows.
-const WIDE: f32 = 1240.0;
 
 /// Colour-label swatches (UI colours, our own choice).
 pub use crate::theme::label_color;
@@ -95,23 +93,20 @@ fn picker(app: &mut LightcraftApp, ui: &mut egui::Ui, id: &str, current: &str, a
 
 pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
-    // one row when there is room, else the metadata pickers and actions go to a second row
-    let two_rows = ui.available_width() < WIDE;
-    let (bar, _) = ui.allocate_exact_size(vec2(ui.available_width(), if two_rows { 2.0 * HEIGHT - 8.0 } else { HEIGHT }), Sense::hover());
-    ui.painter().rect_filled(bar, 0.0, t.chrome);
+    let f = app.session.filter.clone();
+    // Fotofficina: the controls wrap onto as many rows as the width needs (before, two fixed rows, which ran under
+    // the right panel when it was widened); the bar is as tall as its rows
+    let outer = egui::Frame::NONE.fill(t.chrome).inner_margin(egui::Margin { left: 16, right: 16, top: 4, bottom: 4 }).show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+        ui.horizontal_wrapped(|ui| controls(app, ui, &f, &t));
+    });
+    let bar = outer.response.rect;
     ui.painter().line_segment([bar.left_bottom(), bar.right_bottom()], Stroke::new(1.0, t.divider));
     register(ui.ctx(), "filterbar", bar);
-    let f = app.session.filter.clone();
-    let row = |ui: &mut egui::Ui, i: f32| {
-        let r = Rect::from_min_size(bar.min + vec2(16.0, 4.0 + i * (HEIGHT - 8.0)), vec2(bar.width() - 32.0, HEIGHT - 8.0));
-        let mut c = ui.new_child(egui::UiBuilder::new().max_rect(r).layout(egui::Layout::left_to_right(egui::Align::Center)));
-        c.spacing_mut().item_spacing.x = 4.0;
-        c
-    };
-    let mut row1 = row(ui, 0.0);
-    let mut row2 = row(ui, 1.0);
-    let ui = &mut row1;
+}
 
+fn controls(app: &mut LightcraftApp, ui: &mut egui::Ui, f: &lightcraft_catalog::Filter, t: &Tokens) {
     // rating: operator + stars
     caption(ui, "Rating");
     let op_label = match f.rating_op {
@@ -252,7 +247,6 @@ pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui) {
     );
 
     // metadata pickers
-    let ui: &mut egui::Ui = if two_rows { &mut row2 } else { &mut row1 };
     let values = app.caches.filter_values(&app.session.catalog);
     let (cameras, lenses, keywords) = (values.cameras.clone(), values.lenses.clone(), values.keywords.clone());
     for (id, key, all_label, current, values) in [

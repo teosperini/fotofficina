@@ -198,6 +198,7 @@ fn capture_time_set_shift_undo_and_replay() {
     let dir = temp_dir("capture");
     let mut s = Session::new();
     s.open_library(&dir, true).unwrap();
+    s.execute("library.sort", &json!({"key": "captureDate", "ascending": false})).unwrap(); // the test reads newest first
     let ids: Vec<u64> = s.visible_cloned().iter().take(3).map(|p| p.0).collect();
     let before: Vec<Option<String>> = ids.iter().map(|i| captured(&s, *i)).collect();
     let secs = |t: &Option<String>| lightcraft_catalog::dates::iso_seconds(t.as_deref().unwrap()).unwrap();
