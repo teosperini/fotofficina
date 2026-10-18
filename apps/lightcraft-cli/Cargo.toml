@@ -26,7 +26,7 @@ serde_json = { workspace = true }
 dhat = { workspace = true, optional = true }
 
 [features]
-default = ["denoise"]
+default = ["denoise", "rawnind-model"]
 denoise = ["lightcraft-engine/denoise"]
 rawnind-model = ["denoise", "lightcraft-engine/rawnind-model"]
 # Heap profiling: `cargo run --release -p lightcraft-cli --features dhat-heap -- snapshot …` counts

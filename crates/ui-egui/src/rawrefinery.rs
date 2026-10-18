@@ -21,32 +21,61 @@ fn model_slot() -> egui::Id {
     egui::Id::new("rawrefinery:model")
 }
 
+/// The entry after RawRefinery's models: the AI Denoise built into the app (RawNIND), which changes no file: it works
+/// on the photo itself with its Amount slider. Free to use; its weights are GPL-3.0, so they are not bundled: the user
+/// downloads them from Settings ▸ AI Denoise after accepting the terms.
+const BUILT_IN: (&str, &str) = ("RawNIND", "Built in, free: no new file, use Amount. Downloaded on request (GPL)");
+
+/// Number of choices in the menu: RawRefinery's models, then the built-in one.
+fn choices() -> usize {
+    lightcraft_engine::rawrefinery::MODELS.len() + 1
+}
+
+fn is_built_in(index: usize) -> bool {
+    index >= lightcraft_engine::rawrefinery::MODELS.len()
+}
+
+fn label_of(index: usize) -> (&'static str, &'static str) {
+    match lightcraft_engine::rawrefinery::MODELS.get(index) {
+        Some((_, label, what)) => (label, what),
+        None => BUILT_IN,
+    }
+}
+
 fn chosen_model(ctx: &egui::Context) -> usize {
-    let n = lightcraft_engine::rawrefinery::MODELS.len();
-    ctx.data_mut(|d| d.get_persisted::<usize>(model_slot())).filter(|i| *i < n).unwrap_or(0)
+    ctx.data_mut(|d| d.get_persisted::<usize>(model_slot())).filter(|i| *i < choices()).unwrap_or(0)
 }
 
 /// The model menu and the button under AI Denoise: denoise this photo's original raw with RawRefinery.
 pub(crate) fn detail_button(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
     egui::Frame::NONE.inner_margin(Margin { left: 24, right: 22, top: 2, bottom: 6 }).show(ui, |ui| {
-        let models = lightcraft_engine::rawrefinery::MODELS;
         let mut index = chosen_model(ui.ctx());
         ui.horizontal(|ui| {
             ui.label(crate::i18n::tr("Model"));
-            egui::ComboBox::from_id_salt("rawrefinery-model").width(120.0).selected_text(crate::i18n::tr(models[index].1)).show_ui(ui, |ui| {
-                for (i, (_, label, what)) in models.iter().enumerate() {
+            egui::ComboBox::from_id_salt("rawrefinery-model").width(120.0).selected_text(crate::i18n::tr(label_of(index).0)).show_ui(ui, |ui| {
+                for i in 0..choices() {
+                    let (label, what) = label_of(i);
                     ui.selectable_value(&mut index, i, format!("{} — {}", crate::i18n::tr(label), crate::i18n::tr(what)));
                 }
             });
         });
-        ui.label(egui::RichText::new(crate::i18n::tr(models[index].2)).small().weak());
+        ui.add(egui::Label::new(egui::RichText::new(crate::i18n::tr(label_of(index).1)).small().weak()).wrap());
         ui.ctx().data_mut(|d| d.insert_persisted(model_slot(), index));
-        let working = lightcraft_engine::rawrefinery::workers() > 0;
-        let r = ui
-            .add_enabled(!working, egui::Button::new(crate::i18n::tr("Denoise with RawRefinery…")).small())
-            .on_hover_text(crate::i18n::tr(
+        let built_in = is_built_in(index);
+        let working = !built_in && lightcraft_engine::rawrefinery::workers() > 0;
+        let applicable = !built_in || !matches!(app.session.denoise_photo_state(id), lightcraft_engine::denoise::PhotoState::NotApplicable);
+        let (text, hover) = if built_in {
+            (
+                "Denoise with RawNIND…",
+                "Turn on the AI Denoise built into the app for this photo and set its Amount under Detail. No new file: the raw is untouched. The first time, the model is downloaded from Settings after you accept its terms.",
+            )
+        } else {
+            (
+                "Denoise with RawRefinery…",
                 "Denoise the original raw with RawRefinery, a separate program on this computer. The result is a new DNG next to the original, stacked with it.",
-            ));
+            )
+        };
+        let r = ui.add_enabled(!working && applicable, egui::Button::new(crate::i18n::tr(text)).small()).on_hover_text(crate::i18n::tr(hover));
         register(ui.ctx(), "rawrefinery:denoise", r.rect);
         if r.clicked() {
             start(app, ui.ctx(), id);
@@ -55,7 +84,17 @@ pub(crate) fn detail_button(app: &mut LightcraftApp, ui: &mut egui::Ui, id: Phot
 }
 
 fn start(app: &mut LightcraftApp, ctx: &egui::Context, id: PhotoId) {
-    match app.run("photo.rawrefineryDenoise", json!({"ids": [id.0], "model": lightcraft_engine::rawrefinery::MODELS[chosen_model(ctx)].0})) {
+    if is_built_in(chosen_model(ctx)) {
+        // the built-in AI Denoise: its own toggle opens Settings to install the model when there is none
+        if let Err(e) = app.run("denoise.toggle", json!({"id": id.0, "enabled": true})) {
+            app.toast_for(ctx, e, TOAST_SECONDS);
+        }
+        return;
+    }
+    match app.run(
+        "photo.rawrefineryDenoise",
+        json!({"ids": [id.0], "model": lightcraft_engine::rawrefinery::MODELS.get(chosen_model(ctx)).map_or("", |m| m.0)}),
+    ) {
         Ok(v) if v["started"].as_u64() == Some(0) => {
             let why = v["skipped"][0][1].as_str().unwrap_or("nothing to denoise");
             app.toast_for(ctx, format!("RawRefinery: {why}"), TOAST_SECONDS);
