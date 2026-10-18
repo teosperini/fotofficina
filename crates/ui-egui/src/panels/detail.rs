@@ -2609,10 +2609,14 @@ pub(crate) fn filmstrip(app: &mut LightcraftApp, ui: &mut egui::Ui, r: Rect) {
             let p = ui.painter();
             let label = app.session.catalog.photo(*id).and_then(|ph| ph.label);
             let selected = state != lightcraft_engine::SelectionState::NotSelected;
+            // Fotofficina: the photos of an expanded stack sit on a darker band
+            let in_open_stack = app.session.catalog.stack_of(*id).is_some_and(|st| !st.collapsed);
             let base = if selected {
                 t.cell_selected
             } else if resp.hovered() {
                 t.cell_selected.gamma_multiply(0.6)
+            } else if in_open_stack {
+                t.canvas.gamma_multiply(0.55)
             } else {
                 t.canvas
             };

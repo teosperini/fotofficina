@@ -264,6 +264,10 @@ fn show_inner(app: &mut LightcraftApp, ui: &mut egui::Ui) {
                 visible_ids.insert(id);
                 let r = rect.translate(origin.to_vec2());
                 let onscreen = rect.intersects(viewport);
+                // Fotofficina: the photos of an expanded stack sit on a darker band, so they read as one group
+                if stacks.get(&id).is_some_and(|(sid, _)| app.session.catalog.stack(*sid).is_some_and(|st| !st.collapsed)) {
+                    ui.painter().rect_filled(r.expand(4.0), 6.0, Color32::from_black_alpha(90));
+                }
                 cell(app, ui, id, r, square, onscreen, ppp);
                 if let Some((sid, pos)) = stacks.get(&id) {
                     stack_badge(app, ui, id, *sid, *pos, r, square);

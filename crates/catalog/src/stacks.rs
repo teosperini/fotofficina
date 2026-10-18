@@ -190,11 +190,12 @@ impl Catalog {
                         out.push(*id);
                         continue;
                     };
-                    let members = s.photos.iter().copied().filter(|p| present.contains(p));
                     if s.collapsed {
-                        out.extend(members.take(1));
+                        out.extend(s.photos.iter().copied().filter(|p| present.contains(p)).take(1));
                     } else {
-                        out.extend(members);
+                        // Fotofficina: an expanded stack shows all its photos, also those the view would not list
+                        // (a RawRefinery result lives in a `Denoised` folder, outside the folder being browsed)
+                        out.extend(s.photos.iter().copied().filter(|p| present.contains(p) || self.photos.get(p).is_some_and(|ph| !ph.deleted)));
                     }
                 }
             }
@@ -348,6 +349,21 @@ mod tests {
         assert_eq!(iso_seconds("2024-03-01").unwrap() - iso_seconds("2024-02-28").unwrap(), 2 * 86_400, "leap year");
         assert_eq!(iso_seconds("2000-01-01T00:00:00"), Some(946_684_800));
         assert_eq!(iso_seconds("garbage"), None);
+    }
+
+    #[test]
+    fn an_expanded_stack_shows_members_the_query_left_out() {
+        // (Fotofficina) a RawRefinery result lives in another folder than its original: browsing the original's folder
+        // must still show the whole expanded stack
+        let (mut c, ids) = cat(4, &[]);
+        let [a, b, x, d] = ids[..] else { panic!("four ids") };
+        let op = c.group_ops(b, &[a, b], false).unwrap();
+        c.apply(op).unwrap();
+        assert_eq!(c.arrange_stacks(&[a, x, d]), vec![b, a, x, d], "b was not in the query");
+        let stack = c.stack_of(a).unwrap().id;
+        let ops = c.set_collapsed_ops(&[stack], true);
+        c.apply(Op::Batch { ops }).unwrap();
+        assert_eq!(c.arrange_stacks(&[a, x, d]), vec![a, x, d], "collapsed: only what the query holds");
     }
 
     #[test]
