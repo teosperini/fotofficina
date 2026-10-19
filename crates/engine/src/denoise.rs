@@ -953,8 +953,10 @@ pub(crate) fn make_product(spec: &JobSpec, progress: Option<&Progress>) -> Resul
         .thread_name(|i| format!("denoise-{i}"))
         .build()
         .map_err(|e| MakeError::Failed(format!("could not start the worker threads: {e}")))?;
-    let rgb = pool.install(|| denoise_bayer(&mosaic.data, mosaic.width, mosaic.height, layout, runner, &params, &ctl))?;
+    let mut rgb = pool.install(|| denoise_bayer(&mosaic.data, mosaic.width, mosaic.height, layout, runner, &params, &ctl))?;
     drop(mosaic);
+    // Fotofficina: the wide colour blotches the tiles leave (see `lightcraft_denoise_core::blotch`)
+    pool.install(|| lightcraft_denoise_core::blotch::smooth(&mut rgb));
     if cancelled() {
         return Err(MakeError::Cancelled);
     }
