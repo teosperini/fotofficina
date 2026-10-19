@@ -85,7 +85,12 @@ pub(crate) fn detail_button(app: &mut LightcraftApp, ui: &mut egui::Ui, id: Phot
 
 fn start(app: &mut LightcraftApp, ctx: &egui::Context, id: PhotoId) {
     if is_built_in(chosen_model(ctx)) {
-        // the built-in AI Denoise: its own toggle opens Settings to install the model when there is none
+        // the built-in AI Denoise: its own toggle opens Settings to install the model when there is none. It starts at
+        // full strength (the app's own start is 50, which leaves half the noise): the slider is under Detail
+        let amount = app.session.catalog.photo(id).map_or(0.0, |p| p.develop.enhance.denoise);
+        if amount <= 0.0 {
+            let _ = app.run("develop.set", json!({"ids": [id.0], "values": {"enhance.denoise": 100}}));
+        }
         if let Err(e) = app.run("denoise.toggle", json!({"id": id.0, "enabled": true})) {
             app.toast_for(ctx, e, TOAST_SECONDS);
         }
