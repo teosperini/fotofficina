@@ -573,7 +573,7 @@ pub(crate) fn prepare(
     };
     let ev = s.light.exposure as f32;
     let masks = timed("masks", || masks::evaluate(&s.masks, frame, img.width, img.height, &img, &log_l, ev, mattes));
-    Prepared { img, log_l, base, clarity_blur, texture_blur, dark, chroma_blur, air, masks, px_per_long }
+    Prepared { img, log_l, base, clarity_blur, texture_blur, dark, chroma_blur, air, white_ev: None, masks, px_per_long }
 }
 
 /// The airlight of the whole output frame, estimated on a small render of it (`proxy_w` px wide):
@@ -583,6 +583,21 @@ pub(crate) fn frame_airlight(src: &Rgb32f, info: &SourceInfo, s: &DevelopSetting
     white_balance(&mut img, info, s);
     let sigma = (0.02 * frame.px_per_long(proxy_w)).max(1.0) as f32;
     airlight(&gaussian(&img.map(dark_of), sigma))
+}
+
+/// Fotofficina: the scene EV over middle grey (before exposure) of the frame's 99.5th-percentile luminance, from a small
+/// render of the frame (`proxy_w` px wide, shared with [`frame_airlight`]). What Highlights, Whites and Blacks are
+/// anchored to: the photo's own brightest tones.
+pub(crate) fn frame_white_ev(src: &Rgb32f, info: &SourceInfo, s: &DevelopSettings, frame: &Frame, proxy_w: usize, proxy_h: usize) -> f32 {
+    let mut img = Rgb32f::clone(&frame_proxy(src, frame, proxy_w, proxy_h));
+    white_balance(&mut img, info, s);
+    let mut v: Vec<f32> = img.data.iter().map(|p| luminance_2020(*p)).filter(|y| y.is_finite() && *y > 0.0).collect();
+    if v.len() < 16 {
+        return crate::finish::WHITE_REF_EV;
+    }
+    let k = (((v.len() as f32) * 0.995) as usize).min(v.len() - 1);
+    v.select_nth_unstable_by(k, |a, b| a.total_cmp(b));
+    (v[k] / crate::tone::GREY).log2().clamp(-8.0, 6.0)
 }
 
 /// How many airlight proxies [`frame_proxy`] keeps (one per photo and frame being zoomed into; each ≤ 1.8 MB).

@@ -221,8 +221,9 @@ fn only_v2_keeps_the_twigs_under_highlights() {
     let (h1, h2, e) =
         (shot(&with_on(Process::V1, "light.highlights", -100.0)), shot(&with("light.highlights", -100.0)), shot(&with("light.exposure", -1.0)));
     let (k1, k2, ke) = (line_contrast(&h1, bright.0, bright.1), line_contrast(&h2, bright.0, bright.1), line_contrast(&e, bright.0, bright.1));
-    // V1 is the base from before (≈ 0.73 of Exposure's twig contrast), V2 keeps them
-    assert!(k1 < 0.85 * ke && k2 > 0.9 * ke, "twig contrast V1 {k1} EV, V2 {k2} EV, exposure −1 {ke} EV");
+    // V1 is the base from before (≈ 0.73 of Exposure's twig contrast; ≈ 0.92 with Fotofficina's wider, Lightroom-fitted
+    // Highlights window), V2 keeps them
+    assert!(k1 < 0.95 * ke && k2 > 0.9 * ke, "twig contrast V1 {k1} EV, V2 {k2} EV, exposure −1 {ke} EV");
 }
 
 #[test]
@@ -242,4 +243,67 @@ fn the_base_plane_is_cached_per_process() {
     let sg = sig.base.unwrap();
     assert_ne!(local::base_key(&s1, sg, 0), local::base_key(&s2, sg, 0), "the process is part of the key");
     assert_ne!(local::base_key(&s2, sg, 0), local::base_key(&s2, sg, sig.base_detail));
+}
+
+// ---- Fotofficina: Highlights, Whites and Blacks as Lightroom's work (fitted on its exports of one photo)
+
+/// The change, in 8-bit sRGB levels, a tone map gives the display level `level` (the scene value that renders as it).
+fn moved(map: &crate::tone::ToneMap, level: f32) -> f32 {
+    let y = (level / 255.0).powf(2.2);
+    map.apply(y).powf(1.0 / 2.2) * 255.0 - level
+}
+
+#[test]
+fn whites_and_blacks_move_the_tones_as_lightroom_s_do() {
+    use crate::tone::ToneMap;
+    // measured in Lightroom Classic at ±100: Whites +49 levels at 144, −31 at 232; Blacks −53 at 72, +27 at 40
+    let (wh, wl) = (ToneMap::display(0.0, 100.0, 0.0), ToneMap::display(0.0, -100.0, 0.0));
+    let (bl, bh) = (ToneMap::display(0.0, 0.0, -100.0), ToneMap::display(0.0, 0.0, 100.0));
+    assert!((moved(&wh, 144.0) - 49.0).abs() < 4.0, "whites +100 at 144: {}", moved(&wh, 144.0));
+    assert!((moved(&wl, 232.0) + 31.0).abs() < 4.0, "whites −100 at 232: {}", moved(&wl, 232.0));
+    assert!((moved(&bl, 72.0) + 53.0).abs() < 4.0, "blacks −100 at 72: {}", moved(&bl, 72.0));
+    assert!((moved(&bh, 40.0) - 27.0).abs() < 4.0, "blacks +100 at 40: {}", moved(&bh, 40.0));
+    // a half slider is half of the move, and neutral changes nothing
+    let half = ToneMap::display(0.0, 50.0, 0.0);
+    assert!((moved(&half, 144.0) - 24.5).abs() < 3.0, "whites +50 at 144: {}", moved(&half, 144.0));
+    assert!(moved(&ToneMap::display(0.0, 0.0, 0.0), 144.0).abs() < 0.5);
+    // monotone: a brighter value never shows darker, whatever the sliders
+    for map in [&wh, &wl, &bl, &bh] {
+        assert!(map.lut().windows(2).all(|w| w[1] >= w[0] - 1e-6));
+    }
+}
+
+/// A dark scene: its brightest tones are a quarter of grey, far under the fixed levels the sliders used to read.
+fn dark_scene() -> Rgb32f {
+    Rgb32f::from_fn(W, H, |x, _| {
+        let v = 0.004 + 0.044 * x as f32 / W as f32;
+        [v; 3]
+    })
+}
+
+fn dark_shot(s: &DevelopSettings) -> Rgba8 {
+    let info = SourceInfo { raw: true, ..SourceInfo::default() };
+    render(&dark_scene(), &info, s, &RenderRequest::fit(W, H)).image
+}
+
+#[test]
+fn highlights_and_whites_work_on_a_dark_photo() {
+    let plain = dark_shot(&DevelopSettings::default());
+    // the brightest column (x near the right edge): before, neither slider moved anything on a photo this dark
+    let at = |img: &Rgba8| luma(img.data[(H / 2) * W + (W - 20)]);
+    for (id, v) in [("light.highlights", -100.0), ("light.highlights", 100.0), ("light.whites", -100.0), ("light.whites", 100.0)] {
+        let moved = at(&dark_shot(&with(id, v)));
+        assert!((moved - at(&plain)).abs() > 3.0, "{id} {v} moves the brightest tones of a dark photo: {} -> {moved}", at(&plain));
+    }
+}
+
+#[test]
+fn a_normally_exposed_photo_reads_the_sliders_the_same_with_or_without_the_anchor() {
+    // the anchor only moves things for a photo darker than a normal one: this scene's sky is at 0.85
+    let a = shot(&with("light.highlights", -60.0));
+    let b = shot(&with("light.highlights", -60.0));
+    assert!(a == b);
+    let sky_plain = luma(shot(&DevelopSettings::default()).data[10 * W + 100]);
+    let sky_dim = luma(a.data[10 * W + 100]);
+    assert!(sky_dim < sky_plain, "Highlights −60 darkens a bright sky: {sky_plain} -> {sky_dim}");
 }

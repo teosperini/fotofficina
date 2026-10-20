@@ -358,8 +358,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let ss = pf(F_SH) + lt[5];
     if (hh != 0.0 || ss != 0.0) {
         let ws = 1.0 - sstep(-4.8, 0.3, base);
-        let wh = sstep(-1.0, 2.8, base);
-        delta += ss * 1.7 * ws * sqrt(ws) + hh * 1.7 * wh;
+        // Fotofficina: same constants as `finish.rs` (fitted to Lightroom's response)
+        let br = base - pf(F_HL_SHIFT);
+        let wh = sstep(-2.3, 1.8, br) * (1.0 - 0.30 * sstep(2.0, 3.4, br) + 0.30 * sstep(3.4, 4.2, br));
+        var hh2 = hh;
+        if (hh > 0.0) { hh2 = hh / (1.0 - 0.5 * pf(F_HL_SHIFT)); }
+        delta += ss * 2.3 * ws * sqrt(ws) + hh2 * 1.7 * wh;
     }
     if (lt[6] != 0.0) {
         delta += lt[6] * 0.8 * sstep(0.5, 3.0, l1);

@@ -170,6 +170,9 @@ pub struct FinishParams {
     /// Soft proofing (CPU only; the GPU path declines proof renders).
     pub proof: Option<crate::output::ProofParams>,
     pub hl: f32,
+    /// Fotofficina: how far (EV, ≤ 0) the window Highlights acts in is moved down for a photo whose brightest tones are
+    /// darker than a normal one's, so the slider works on this photo's own highlights (see [`WHITE_REF_EV`]).
+    pub hl_shift: f32,
     pub sh: f32,
     pub clar: f32,
     pub tex: f32,
@@ -208,6 +211,7 @@ impl FinishParams {
         h: usize,
         px_per_long: f64,
         air_pre: f32,
+        white_ev: Option<f32>,
         space: OutputSpace,
     ) -> FinishParams {
         let effects = s.section_enabled("effects");
@@ -228,7 +232,7 @@ impl FinishParams {
             peak,
             calib: if calibration { crate::colorops::calibration_matrix(&s.calibration) } else { None },
             shadow_tint: if calibration { (s.calibration.shadows_tint / 100.0) as f32 } else { 0.0 },
-            tone: base_tone(s, info, peak),
+            tone: base_tone(s, info, peak, white_ev.map(|e| e + ev)),
             lut: crate::lut::get(&s.profile.id).map(|l| (l, (s.profile.amount / 100.0).clamp(0.0, 2.0) as f32)),
             ops: ColorOps::new(s),
             curves: curve_luts(&s.curve),
@@ -239,6 +243,7 @@ impl FinishParams {
             out_trc: space.trc(),
             proof: None,
             hl: (s.light.highlights / 100.0) as f32,
+            hl_shift: white_ev.map_or(0.0, |e| (e + ev - WHITE_REF_EV).clamp(-6.0, 0.0)),
             sh: (s.light.shadows / 100.0) as f32,
             clar,
             tex,
@@ -277,13 +282,17 @@ impl FinishParams {
 /// `peak` is the HDR render's peak relative to SDR white ([`lightcraft_develop::Hdr::peak`]); at 1.0 (SDR)
 /// every arm is the SDR tone map. An HDR render keeps the camera's look through the midtones and
 /// lifts its highlights past white ([`ToneMap::camera_hdr`]), so it matches the SDR render below them.
-pub fn base_tone(s: &DevelopSettings, info: &SourceInfo, peak: f32) -> ToneMap {
+/// Scene EV over middle grey of the brightest tones of a normally exposed photo; a photo whose brightest tones are
+/// darker than this has its Highlights window moved down by the difference ([`FinishParams::hl_shift`]).
+pub const WHITE_REF_EV: f32 = 2.0;
+
+pub fn base_tone(s: &DevelopSettings, info: &SourceInfo, peak: f32, white_ev: Option<f32>) -> ToneMap {
     let l = &s.light;
     match s.process.process() {
         // V2 changes the Highlights/Shadows base (`local::tone_base`), not the tone map
         Process::V1 | Process::V2 => match info.camera_tone.as_ref().filter(|_| info.raw) {
-            Some(curve) => ToneMap::camera_hdr(curve, l.contrast, l.whites, l.blacks, peak),
-            None if info.raw => ToneMap::hdr(l.contrast, l.whites, l.blacks, peak),
+            Some(curve) => ToneMap::camera_anchored(curve, l.contrast, l.whites, l.blacks, peak, white_ev),
+            None if info.raw => ToneMap::hdr_anchored(l.contrast, l.whites, l.blacks, peak, white_ev),
             None => ToneMap::display_hdr(l.contrast, l.whites, l.blacks, peak),
         },
     }
@@ -299,7 +308,7 @@ pub(crate) fn finish(
     proof: Option<crate::Proof>,
 ) -> Rgba8 {
     let (w, h) = (p.img.width, p.img.height);
-    let mut fp = FinishParams::new(s, frame, info, w, h, p.px_per_long, p.air, space);
+    let mut fp = FinishParams::new(s, frame, info, w, h, p.px_per_long, p.air, p.white_ev, space);
     fp.proof = proof.map(|pr| pr.params(space));
     if let Some(d) = display {
         fp.for_display(d, proof);
@@ -328,7 +337,7 @@ pub(crate) fn finish_deep(
 ) -> DeepImage {
     use lightcraft_color::transfer::srgb_to_linear;
     let (w, h) = (p.img.width, p.img.height);
-    let mut fp = FinishParams::new(s, frame, info, w, h, p.px_per_long, p.air, space);
+    let mut fp = FinishParams::new(s, frame, info, w, h, p.px_per_long, p.air, p.white_ev, space);
     fp.proof = proof.map(|pr| pr.params(space));
     let trc = fp.out_trc;
     let samples = match depth {
@@ -373,6 +382,7 @@ pub(crate) fn finish_with<T: Copy + Default + Send>(
         to_out,
         out_luma,
         hl,
+        hl_shift,
         sh,
         clar,
         tex,
@@ -386,8 +396,8 @@ pub(crate) fn finish_with<T: Copy + Default + Send>(
         grain,
         ..
     } = fp;
-    let (hl, sh, clar, tex, dehaze, sharpen, sharpen_mask, air, air_pre, gain, ev) =
-        (*hl, *sh, *clar, *tex, *dehaze, *sharpen, *sharpen_mask, *air, *air_pre, *gain, *ev);
+    let (hl, hl_shift, sh, clar, tex, dehaze, sharpen, sharpen_mask, air, air_pre, gain, ev) =
+        (*hl, *hl_shift, *sh, *clar, *tex, *dehaze, *sharpen, *sharpen_mask, *air, *air_pre, *gain, *ev);
     let terms: Vec<[f32; MASK_TERMS]> = p.masks.iter().map(|m| mask_terms(&m.adjust)).collect();
     let out_to_norm = fp.out_to_norm;
     let long = fp.ow.max(fp.oh);
@@ -480,8 +490,14 @@ pub(crate) fn finish_with<T: Copy + Default + Send>(
             let (hh, ss) = (hl + l_hl, sh + l_sh);
             if hh != 0.0 || ss != 0.0 {
                 let ws = 1.0 - smooth(-4.8, 0.3, base);
-                let wh = smooth(-1.0, 2.8, base);
-                delta += ss * 1.7 * ws * ws.sqrt() + hh * 1.7 * wh;
+                // Fotofficina: the window and strength of Highlights and the strength of Shadows are fitted to Lightroom's
+                // response (measured on one high-contrast photo, see `tone::WHITES_LOW`): Highlights act from about 2 EV
+                // under the photo's bright end, a little eased where the measured range ends and back to full on blown lights; Shadows are 35 % stronger than before
+                let br = base - hl_shift;
+                let wh = smooth(-2.3, 1.8, br) * (1.0 - 0.30 * smooth(2.0, 3.4, br) + 0.30 * smooth(3.4, 4.2, br));
+                // (a photo darker than a normal one has no highlight roll-off to hold a lift back: +Highlights is eased there)
+                let hh = if hh > 0.0 { hh / (1.0 - 0.5 * hl_shift) } else { hh };
+                delta += ss * 2.3 * ws * ws.sqrt() + hh * 1.7 * wh;
             }
             if l_wh != 0.0 {
                 delta += l_wh * 0.8 * smooth(0.5, 3.0, l1);

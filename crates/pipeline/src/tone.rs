@@ -111,8 +111,18 @@ impl ToneMap {
     /// gain map only lifts highlights), then the highlights gain up to `peak − 1` more as in
     /// [`ToneMap::hdr`].
     pub fn camera_hdr(curve: &CameraTone, contrast: f64, whites: f64, blacks: f64, peak: f32) -> ToneMap {
+        ToneMap::camera_anchored(curve, contrast, whites, blacks, peak, None)
+    }
+
+    /// [`ToneMap::camera_hdr`] for a photo whose brightest tones sit at `white_ev` (scene EV over grey, after exposure):
+    /// Whites and Blacks read the photo's own range, not fixed levels ([`lr_whites_blacks`]). `None`: a photo that
+    /// reaches white.
+    pub fn camera_anchored(curve: &CameraTone, contrast: f64, whites: f64, blacks: f64, peak: f32, white_ev: Option<f32>) -> ToneMap {
         let peak = if peak.is_finite() { peak.max(1.0) } else { 1.0 };
-        let adjustment = Self::display(contrast, whites, blacks);
+        // the encoded level the camera look gives that brightest tone, against 0.95 (white): a photo that reaches it reads 1
+        let scale =
+            white_ev.filter(|e| e.is_finite()).map_or(1.0, |e| (curve.apply(GREY * 2f32.powf(e)).max(0.0).powf(1.0 / 2.2) / 0.95).clamp(0.15, 1.0));
+        let adjustment = Self::display_anchored(contrast, whites, blacks, 1.0, scale);
         let neutral = contrast == 0.0 && whites == 0.0 && blacks == 0.0;
         let top = (2.9 - 1.6 * (whites as f32 / 100.0) + peak.log2() + 1.0).max(HDR_FROM_EV + 0.5);
         let lut = (0..LUT_N)
@@ -136,6 +146,34 @@ impl ToneMap {
     /// white point moved up by the headroom, so the result stays monotone, never exceeds `peak`,
     /// and reaches it there (within the table's range).
     pub fn hdr(contrast: f64, whites: f64, blacks: f64, peak: f32) -> ToneMap {
+        ToneMap::hdr_anchored(contrast, whites, blacks, peak, None)
+    }
+
+    /// [`ToneMap::hdr`] with Whites and Blacks as Lightroom's move the tones ([`lr_whites_blacks`]), read against a photo
+    /// whose brightest tones sit at `white_ev` (scene EV over grey, after exposure; `None`: one that reaches white).
+    pub fn hdr_anchored(contrast: f64, whites: f64, blacks: f64, peak: f32, white_ev: Option<f32>) -> ToneMap {
+        if whites == 0.0 && blacks == 0.0 {
+            return ToneMap::hdr_plain(contrast, 0.0, 0.0, peak);
+        }
+        let plain = ToneMap::hdr_plain(contrast, 0.0, 0.0, peak);
+        let scale =
+            white_ev.filter(|e| e.is_finite()).map_or(1.0, |e| (plain.apply(GREY * 2f32.powf(e)).max(0.0).powf(1.0 / 2.2) / 0.95).clamp(0.15, 1.0));
+        let (w, b) = ((whites / 100.0) as f32, (blacks / 100.0) as f32);
+        let mut top = 0.0f32;
+        let lut = plain
+            .lut
+            .iter()
+            .map(|o| {
+                let q = lr_whites_blacks(o.max(0.0).powf(1.0 / 2.2), w, b, scale).powf(2.2).clamp(0.0, peak.max(1.0));
+                // monotone: a brighter scene value never shows darker
+                top = top.max(q);
+                top
+            })
+            .collect();
+        ToneMap { lut, chroma: NO_CHROMA }
+    }
+
+    fn hdr_plain(contrast: f64, whites: f64, blacks: f64, peak: f32) -> ToneMap {
         let peak = if peak.is_finite() { peak.max(1.0) } else { 1.0 };
         let c = (contrast / 100.0) as f32;
         let slope = if c >= 0.0 { 1.0 + 0.55 * c } else { 1.0 + 0.4 * c };
@@ -181,6 +219,13 @@ impl ToneMap {
     /// source, e.g. a decoded gain-map image) pass through and roll off softly towards `peak`
     /// instead of clipping at 1; SDR sources (≤ 1) render as with [`ToneMap::display`].
     pub fn display_hdr(contrast: f64, whites: f64, blacks: f64, peak: f32) -> ToneMap {
+        Self::display_anchored(contrast, whites, blacks, peak, 1.0)
+    }
+
+    /// [`ToneMap::display_hdr`] with Whites and Blacks read against a photo whose white sits at `scale` (≤ 1) of the
+    /// display range ([`lr_whites_blacks`]).
+    pub fn display_anchored(contrast: f64, whites: f64, blacks: f64, peak: f32, scale: f32) -> ToneMap {
+        let scale = if scale.is_finite() { scale.clamp(0.15, 1.0) } else { 1.0 };
         let peak = if peak.is_finite() { peak.max(1.0) } else { 1.0 };
         let c = (contrast / 100.0) as f32;
         let w = (whites / 100.0) as f32;
@@ -194,14 +239,9 @@ impl ToneMap {
                 if p <= 1.0 {
                     // S-curve anchored at 0, grey and 1
                     p += c * 0.35 * (p - m) * (1.0 - (2.0 * p - 1.0).powi(2));
-                    // whites: lift/lower the upper tones; blacks: the lower tones
-                    let up = smooth(0.45, 1.0, p);
-                    p += w * 0.12 * up * (1.0 - p * 0.5);
-                    let lo = 1.0 - smooth(0.0, 0.45, p);
-                    p += b * 0.07 * lo * (p * 2.0).min(1.0);
-                } else {
-                    p += w * 0.12 * 0.5;
                 }
+                // whites and blacks as Lightroom's move the tones ([`lr_whites_blacks`])
+                p = lr_whites_blacks(p, w, b, scale);
                 let mut o = p.max(0.0).powf(2.2);
                 // short shoulder: slope 1 at 0.95, reaching 1.0 at 1.05
                 if peak > 1.0 && o > 0.95 {
@@ -215,6 +255,15 @@ impl ToneMap {
                 o.clamp(0.0, peak)
             })
             .collect();
+        let mut lut: Vec<f32> = lut;
+        if whites != 0.0 || blacks != 0.0 {
+            // the tables are not monotone by construction: a brighter scene value never shows darker
+            let mut top = 0.0f32;
+            for v in lut.iter_mut() {
+                top = top.max(*v);
+                *v = top;
+            }
+        }
         ToneMap { lut, chroma: NO_CHROMA }
     }
 
@@ -254,6 +303,39 @@ impl ToneMap {
         let v = self.lut[i] + (self.lut[i + 1] - self.lut[i]) * t;
         if ev < LUT_MIN_EV { v * (y / (GREY * 2f32.powf(LUT_MIN_EV))) } else { v }
     }
+}
+
+/// Fotofficina: how Lightroom's Whites and Blacks move the tones. Measured on a high-contrast photo exported from
+/// Lightroom Classic at each slider's two ends (IMG_8554, a 6D Mark II raw): the mean change in 8-bit sRGB level of the
+/// pixels at each level of the unadjusted export, at −100 (`*_LOW`) and +100 (`*_HIGH`). A slider value in between scales
+/// the end's row linearly. Whites reach well into the midtones (+49 levels at 144 for +100), Blacks work through the
+/// whole lower half (−53 at 72 for −100): not the narrow top/bottom bands of the original engine.
+const LR_X: [f32; 17] = [0.0, 4.0, 12.0, 24.0, 40.0, 56.0, 72.0, 88.0, 104.0, 120.0, 144.0, 176.0, 200.0, 216.0, 232.0, 248.0, 255.0];
+const WHITES_LOW: [f32; 17] = [0.0, 0.0, 0.0, 0.0, -1.0, -2.0, -3.0, -4.0, -6.0, -8.0, -11.0, -16.0, -25.0, -28.0, -31.0, -30.0, -28.0];
+const WHITES_HIGH: [f32; 17] = [0.0, 0.0, 1.0, 3.0, 7.0, 10.0, 16.0, 23.0, 31.0, 39.0, 49.0, 52.0, 48.0, 38.0, 23.0, 10.0, 6.0];
+const BLACKS_LOW: [f32; 17] = [-4.0, -5.0, -10.0, -21.0, -38.0, -51.0, -53.0, -49.0, -45.0, -41.0, -32.0, -21.0, -12.0, -8.0, -5.0, -2.0, -1.0];
+const BLACKS_HIGH: [f32; 17] = [10.0, 12.0, 16.0, 22.0, 27.0, 26.0, 26.0, 25.0, 23.0, 22.0, 18.0, 12.0, 6.0, 4.0, 2.0, 1.0, 0.0];
+
+/// A row of the Lightroom tables at 8-bit level `x` (clamped at the ends).
+fn lr_row(row: &[f32; 17], x: f32) -> f32 {
+    let x = x.clamp(0.0, 255.0);
+    let i = LR_X.partition_point(|k| *k <= x).saturating_sub(1).min(LR_X.len() - 2);
+    let (x0, x1) = (LR_X.get(i).copied().unwrap_or(0.0), LR_X.get(i + 1).copied().unwrap_or(255.0));
+    let (y0, y1) = (row.get(i).copied().unwrap_or(0.0), row.get(i + 1).copied().unwrap_or(0.0));
+    if x1 > x0 { y0 + (y1 - y0) * (x - x0) / (x1 - x0) } else { y0 }
+}
+
+/// Whites `w` and Blacks `b` (−1..1) applied to the display-encoded luminance `p` (0..1; above 1 an HDR highlight). `scale`
+/// is the encoded level of this photo's white over 0.95, at most 1: a dark photo's tones are read against its own range
+/// (the table's 255 is the photo's white), so the sliders work on it as on a normal one. 1 for a photo that reaches white.
+fn lr_whites_blacks(p: f32, w: f32, b: f32, scale: f32) -> f32 {
+    if w == 0.0 && b == 0.0 {
+        return p;
+    }
+    let x = p / scale * 255.0;
+    let wd = if w < 0.0 { -w * lr_row(&WHITES_LOW, x) } else { w * lr_row(&WHITES_HIGH, x) };
+    let bd = if b < 0.0 { -b * lr_row(&BLACKS_LOW, x) } else { b * lr_row(&BLACKS_HIGH, x) };
+    (p + scale * (wd + bd) / 255.0).max(0.0)
 }
 
 fn smooth(e0: f32, e1: f32, x: f32) -> f32 {
