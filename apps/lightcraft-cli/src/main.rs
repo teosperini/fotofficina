@@ -189,7 +189,7 @@ fn main() -> ExitCode {
 /// Raw files below `path` (or `path` itself), skipping hidden and NAS metadata folders.
 fn raw_files(path: &Path, out: &mut Vec<std::path::PathBuf>, depth: usize) {
     let is_raw =
-        |p: &Path| p.extension().and_then(|e| e.to_str()).is_some_and(|e| ["arw", "nef", "nrw", "raf"].iter().any(|x| e.eq_ignore_ascii_case(x)));
+        |p: &Path| p.extension().and_then(|e| e.to_str()).is_some_and(|e| ["arw", "nef", "nrw", "raf", "cr2", "cr3"].iter().any(|x| e.eq_ignore_ascii_case(x)));
     if path.is_file() {
         if is_raw(path) {
             out.push(path.to_path_buf());
